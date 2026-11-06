@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write # écrire les fichiers de données de ce dépôt, rien d'autre
+  contents: write # écrire le fichier de données de ce dépôt, rien d'autre
 
 jobs:
   recuperer:
@@ -23,7 +23,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add annonces-ouvertes.json marches-travaux.json
+          git add marches-travaux.json
           git diff --cached --quiet || git commit -m "Sources ouvertes du $(date +%F)"
           git pull --rebase "https://x-access-token:${JETON}@github.com/${GITHUB_REPOSITORY}.git" main
           git push "https://x-access-token:${JETON}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main

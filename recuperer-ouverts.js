@@ -1,24 +1,9 @@
-// Sources publiées sous Licence Ouverte : consultations en cours (flux XML) et marchés de travaux absents des DECP.
-// Écrit annonces-ouvertes.json et marches-travaux.json. Une source en panne garde son fichier précédent. Aucun identifiant.
+// Source publiée sous Licence Ouverte : marchés de travaux absents des DECP.
+// Écrit marches-travaux.json ; en cas de panne, le fichier précédent reste en place. Aucun identifiant.
 const fs = require('fs');
 const path = require('path');
 
-// N'ajouter ici qu'un flux dont la licence ouverte est vérifiée.
-const FLUX = [{ id: 'pompey', nom: 'Bassin de Pompey', licence: 'Licence Ouverte 2.0', url: 'https://www.xmarches.fr/entreprise/listeConsultations_xml.php?UIDSPL=GC54006', plateforme: 'XMarchés', deps: ['54'] }];
 const JEU_TRAVAUX = 'https://www.data.gouv.fr/api/1/datasets/marches-publics-de-travaux-connus-seulement-par-un-avis-dattribution-boamp-ou-ted-absents-des-decp/';
-
-const decoder = (s) => String(s).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'").replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
-const champ = (bloc, nom) => { const m = bloc.match(new RegExp('<' + nom + '>([\\s\\S]*?)</' + nom + '>')); return m ? decoder(m[1]) : ''; };
-const dateIso = (s) => { const m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : ''; };
-
-// Flux XML de consultations : seules celles encore ouvertes sont gardées.
-function lireFlux(xml, flux, aujourdhui) {
-  return [...String(xml).matchAll(/<marche_\d+>([\s\S]*?)<\/marche_\d+>/g)].map(([, b]) => ({
-    id: flux.id + '-' + champ(b, 'ref'), ref: champ(b, 'ref'), objet: champ(b, 'titre'), acheteurNom: champ(b, 'personnepublique'), siret: champ(b, 'siret'), url: champ(b, 'url'),
-    type: champ(b, 'typemarche'), secteur: champ(b, 'secteuractivite'), dateParution: dateIso(champ(b, 'datepubli')), dateLimite: dateIso(champ(b, 'datelim')),
-    deps: flux.deps, sourceNom: flux.nom, plateforme: flux.plateforme
-  })).filter((a) => a.objet && a.url && a.dateLimite >= aujourdhui);
-}
 
 // CSV avec champs entre guillemets (l'objet contient des virgules et des retours à la ligne).
 function lireCsv(texte) {
@@ -52,11 +37,6 @@ async function texteDe(url) { const r = await fetch(url, { signal: AbortSignal.t
 async function principal() {
   const genere = new Date().toISOString().slice(0, 10);
   try {
-    const annonces = (await Promise.all(FLUX.map(async (f) => lireFlux(await texteDe(f.url), f, genere)))).flat();
-    ecrire('annonces-ouvertes.json', { genere, licence: 'Licence Ouverte 2.0', flux: FLUX.map((f) => f.nom), annonces });
-    console.log(annonces.length + ' consultations ouvertes');
-  } catch (e) { console.log('::warning::flux non mis à jour : ' + e.message); }
-  try {
     const jeu = JSON.parse(await texteDe(JEU_TRAVAUX));
     const res = jeu.resources.find((r) => r.format === 'csv');
     if (jeu.license !== 'lov2' || !res) throw new Error('licence ou fichier inattendu');
@@ -68,4 +48,4 @@ async function principal() {
 }
 
 if (require.main === module) principal();
-module.exports = { FLUX, lireFlux, lireCsv, reduireTravaux };
+module.exports = { lireCsv, reduireTravaux };
