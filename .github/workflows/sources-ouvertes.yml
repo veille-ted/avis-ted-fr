@@ -1,0 +1,29 @@
+name: Sources ouvertes
+
+on:
+  schedule:
+    - cron: '45 4 * * 1-5' # chaque jour ouvré
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # écrire les fichiers de données de ce dépôt, rien d'autre
+
+jobs:
+  recuperer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false # le jeton n'est donné qu'à l'étape de publication
+      - run: node recuperer-ouverts.js
+      - name: Publier les fichiers
+        env:
+          JETON: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add annonces-ouvertes.json marches-travaux.json
+          git diff --cached --quiet || git commit -m "Sources ouvertes du $(date +%F)"
+          git pull --rebase "https://x-access-token:${JETON}@github.com/${GITHUB_REPOSITORY}.git" main
+          git push "https://x-access-token:${JETON}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
