@@ -26,7 +26,7 @@ function requete(prefixes, aujourdhui, jours) {
   const t = aujourdhui.replace(/-/g, '');
   const cpv = prefixes.length ? ` AND classification-cpv IN (${prefixes.map((p) => p + '*').join(' ')})` : '';
   return `(buyer-country=FRA OR place-of-performance=FRA) AND notice-type IN (${TYPES.join(' ')})${cpv}`
-    + ` AND (deadline-receipt-tender-date-lot>=${t} OR deadline-receipt-request-date-lot>=${t} OR publication-date>=${joursAvant(aujourdhui, jours).replace(/-/g, '')}) SORT BY publication-date DESC`;
+    + ` AND (deadline-receipt-tender-date-lot>=${t} OR deadline-receipt-request-date-lot>=${t} OR publication-date>=${joursAvant(aujourdhui, jours).replace(/-/g, '')})`;
 }
 
 // Encore ouvert : une date limite de remise des offres à venir ; sinon une date limite des candidatures à venir ;
@@ -57,7 +57,8 @@ const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function appeler(fetch, corps, pause) {
   for (let essai = 1; ; essai++) {
     const r = await fetch(URL_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps });
-    if (r.status !== 429 || essai === ESSAIS) return r;
+    // trop de requêtes, ou serveur momentanément indisponible : on réessaie
+    if (![429, 502, 503, 504].includes(r.status) || essai === ESSAIS) return r;
     const demande = Number(r.headers && r.headers.get && r.headers.get('retry-after'));
     await pause(demande > 0 ? demande * 1000 : essai * 15000);
   }
@@ -67,14 +68,21 @@ async function recuperer(fetch, { prefixes, aujourdhui, jours, pause = dormir })
   const q = requete(prefixes, aujourdhui, jours);
   const avis = new Map();
   let tronque = false;
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    if (page > 1) await pause(PAUSE_MS);
-    const r = await appeler(fetch, JSON.stringify({ query: q, fields: CHAMPS, limit: TAILLE_PAGE, page }), pause);
+  // Lecture par itération (jeton de reprise) : parcours stable. La lecture par numéro de page, triée sur une date que des centaines
+  // d'avis partagent, en lisait ~200 deux fois et en sautait autant (mesuré le 16/11/2026 : 215 sur 14 675).
+  let jeton = null;
+  for (let tour = 1; ; tour++) {
+    if (tour > MAX_PAGES) { tronque = true; break; }
+    if (tour > 1) await pause(PAUSE_MS);
+    const corps = { query: q, fields: CHAMPS, limit: TAILLE_PAGE, paginationMode: 'ITERATION' };
+    if (jeton) corps.iterationNextToken = jeton;
+    const r = await appeler(fetch, JSON.stringify(corps), pause);
     if (!r.ok) throw new Error('TED a répondu ' + r.status);
-    const notices = (await r.json()).notices || [];
+    const reponse = await r.json();
+    const notices = reponse.notices || [];
     for (const n of notices) if (n['publication-number']) avis.set(String(n['publication-number']), n);
-    if (notices.length < TAILLE_PAGE) break;
-    if (page === MAX_PAGES) tronque = true;
+    jeton = reponse.iterationNextToken;
+    if (!notices.length || !jeton) break;
   }
   return { notices: [...avis.values()].filter((n) => garder(n, aujourdhui)).map(reduire), tronque };
 }
