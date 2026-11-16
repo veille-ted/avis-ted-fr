@@ -5,26 +5,37 @@ const fs = require('fs');
 const path = require('path');
 
 const URL_API = 'https://api.ted.europa.eu/v3/notices/search';
-// Tout le bâtiment : travaux, maintenance, installation, ingénierie et services aux bâtiments.
-const PREFIXES = ['45', '50', '51', '71', '90'];
-const JOURS = 60;
+// Depuis le 16/11/2026 : plus aucun filtre de code CPV (un avis de climatisation classé en équipements, de chauffage urbain… était perdu) ;
+// l'outil trie ensuite par métier. PREFIXES reste pour la compatibilité, vide = tous les codes.
+const PREFIXES = [];
+const JOURS = 90; // avis sans date limite : gardés s'ils ont paru depuis 90 jours
 const TAILLE_PAGE = 250;
-const MAX_PAGES = 40;
-const CHAMPS = ['publication-number', 'notice-title', 'buyer-name', 'publication-date', 'deadline-receipt-tender-date-lot', 'classification-cpv',
+const MAX_PAGES = 100; // 25 000 avis au plus ; au-delà, le fichier est marqué « tronqué »
+// Tous les avis qui appellent à la concurrence, pas seulement les avis de marché standard : concours (maîtrise d'œuvre),
+// services sociaux et spécifiques, pré-informations valant appel à la concurrence, systèmes de qualification, sous-traitance
+const TYPES = ['cn-standard', 'cn-social', 'cn-desg', 'pin-cfc-standard', 'pin-cfc-social', 'qu-sy', 'subco'];
+const CHAMPS = ['publication-number', 'procedure-identifier', 'notice-type', 'notice-title', 'buyer-name', 'publication-date', 'deadline-receipt-tender-date-lot', 'deadline-receipt-request-date-lot', 'classification-cpv',
   'place-of-performance-subdiv-proc', 'place-of-performance-subdiv-lot', 'place-of-performance-post-code-proc', 'place-of-performance-post-code-lot', 'organisation-post-code-buyer',
   'buyer-identifier', 'estimated-value-proc', 'framework-maximum-value-lot', 'document-url-lot', 'contract-nature-main-proc', 'framework-agreement-lot'];
 
 const joursAvant = (iso, n) => new Date(new Date(iso + 'T12:00:00Z').getTime() - n * 864e5).toISOString().slice(0, 10);
 
+// Acheteurs français, ou travaux en France d'un acheteur étranger ; encore ouverts (remise des offres ou des candidatures à venir),
+// ou parus depuis « jours » jours (avis sans date limite : garder() tranche ensuite)
 function requete(prefixes, aujourdhui, jours) {
-  const motifs = prefixes.map((p) => p + '*').join(' ');
-  return `buyer-country=FRA AND notice-type=cn-standard AND publication-date>=${joursAvant(aujourdhui, jours).replace(/-/g, '')} AND classification-cpv IN (${motifs}) SORT BY publication-date DESC`;
+  const t = aujourdhui.replace(/-/g, '');
+  const cpv = prefixes.length ? ` AND classification-cpv IN (${prefixes.map((p) => p + '*').join(' ')})` : '';
+  return `(buyer-country=FRA OR place-of-performance=FRA) AND notice-type IN (${TYPES.join(' ')})${cpv}`
+    + ` AND (deadline-receipt-tender-date-lot>=${t} OR deadline-receipt-request-date-lot>=${t} OR publication-date>=${joursAvant(aujourdhui, jours).replace(/-/g, '')}) SORT BY publication-date DESC`;
 }
 
-// Encore ouvert : au moins une date limite à venir ; sans date connue, gardé (l'outil décide à la lecture).
+// Encore ouvert : une date limite de remise des offres à venir ; sinon une date limite des candidatures à venir ;
+// sans aucune date, gardé (l'outil décide à la lecture, d'après la date de parution).
 function garder(n, aujourdhui) {
-  const dates = [].concat(n['deadline-receipt-tender-date-lot'] || []).map((d) => String(d).slice(0, 10));
-  return !dates.length || dates.some((d) => d >= aujourdhui);
+  const dates = (cle) => [].concat(n[cle] || []).map((d) => String(d).slice(0, 10));
+  const offres = dates('deadline-receipt-tender-date-lot'), candidatures = dates('deadline-receipt-request-date-lot');
+  if (offres.some((d) => d >= aujourdhui) || candidatures.some((d) => d >= aujourdhui)) return true;
+  return !offres.length && !candidatures.length;
 }
 
 // Fichier léger : le français seul (TED donne chaque titre dans toutes les langues de l'Union), sans valeur répétée.
@@ -79,4 +90,4 @@ async function principal() {
 }
 
 if (require.main === module) principal().catch((e) => { console.error(e.message); process.exit(1); });
-module.exports = { requete, recuperer, garder, reduire, PREFIXES };
+module.exports = { requete, recuperer, garder, reduire, PREFIXES, TYPES };
