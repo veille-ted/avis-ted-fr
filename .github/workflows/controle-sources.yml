@@ -1,0 +1,28 @@
+name: Controle des sources
+
+on:
+  schedule:
+    - cron: '0 5 * * 1-5' # chaque jour ouvré, une heure après les avis TED
+  workflow_dispatch: {} # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: write # écrire controle.json dans ce dépôt, rien d'autre
+
+jobs:
+  controler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false # le jeton n'est donné qu'à l'étape de publication
+      - run: node controler-sources.js # écrit controle.json, même quand une source est en écart (c'est ce qu'il doit signaler)
+      - name: Publier controle.json
+        env:
+          JETON: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add controle.json
+          git diff --cached --quiet || git commit -m "Contrôle des sources du $(date +%F)"
+          git push "https://x-access-token:${JETON}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
