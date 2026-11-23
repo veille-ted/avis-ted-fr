@@ -1,36 +1,36 @@
 {
- "jour": "2026-11-20",
- "majLe": "2026-11-20T13:48:53.943Z",
+ "jour": "2026-11-23",
+ "majLe": "2026-11-23T15:40:31.326Z",
  "verifications": [
   {
    "source": "BOAMP",
    "nom": "à jour",
    "ok": true,
-   "detail": "dernière parution du 2026-11-20"
+   "detail": "dernière parution du 2026-11-23"
   },
   {
    "source": "BOAMP",
    "nom": "volume",
    "ok": true,
-   "detail": "5449 avis de marché ouverts en France"
+   "detail": "5317 avis de marché ouverts en France"
   },
   {
    "source": "BOAMP",
    "nom": "export complet",
    "ok": true,
-   "detail": "1708 reçus sur 1708 annoncés"
+   "detail": "1677 reçus sur 1677 annoncés"
   },
   {
    "source": "TED",
    "nom": "fichier du jour",
    "ok": true,
-   "detail": "5381 avis, fichier du 2026-11-20"
+   "detail": "5296 avis, fichier du 2026-11-23"
   },
   {
    "source": "DECP",
    "nom": "à jour",
    "ok": true,
-   "detail": "mise à jour du 2026-11-17"
+   "detail": "mise à jour du 2026-11-23"
   }
  ]
 }
